@@ -192,3 +192,39 @@ describe('Control de gasto', () => {
     expect(sep.installments).toBe(1);
   });
 });
+
+import { debtPayoffPlans, investmentAdvice } from './advisor-actions';
+import { paySummary, payablesForMonth, payKey } from './payments';
+
+describe('Asesor — acciones', () => {
+  it('ordena deudas por avalancha (E.A.) y bola de nieve (saldo)', () => {
+    const c = [
+      concept({ id: 'a', name: 'Chico caro', category: 'fixed', type: 'Obligaciones no esenciales', kind: 'installment', amount: 100_000, installments: 6, totalInstallments: 6, principal: 500_000 }),
+      concept({ id: 'b', name: 'Grande barato', category: 'fixed', type: 'Obligaciones no esenciales', kind: 'installment', amount: 500_000, installments: 10, totalInstallments: 10, principal: 4_800_000 }),
+    ];
+    const { avalanche, snowball } = debtPayoffPlans(c);
+    // 'a' tiene más interés (100k*6=600k vs 500k cap) → mayor E.A. → primero en avalancha
+    expect(avalanche[0].concept.id).toBe('a');
+    // 'a' tiene menor saldo (600k vs 5M) → primero en bola de nieve también aquí
+    expect(snowball[0].concept.id).toBe('a');
+  });
+  it('sugiere invertir el excedente del mes', () => {
+    const adv = investmentAdvice(base);
+    expect(adv.monthlyFree).toBe(211_000);
+    expect(adv.investable).toBeGreaterThanOrEqual(211_000);
+  });
+});
+
+describe('Control de pagos', () => {
+  const opts2 = { autofill: true, year: 2026, currentMonth: 7 };
+  it('por defecto todo pendiente; suma según estado', () => {
+    const ledger = { [payKey('f1', 2026, 7)]: 'paid' as const };
+    const items = payablesForMonth(base, ledger, 7, opts2);
+    expect(items.length).toBeGreaterThan(0);
+    const s = paySummary(base, ledger, 7, opts2);
+    expect(s.income).toBe(5_300_000);
+    expect(s.paid).toBe(1_400_000); // Arriendo marcado pagado
+    expect(s.balance).toBe(5_300_000 - 1_400_000);
+    expect(s.pending).toBeGreaterThan(0);
+  });
+});

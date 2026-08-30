@@ -6,3 +6,5 @@ export * from './summary';
 export * from './advisor';
 export * from './debt';
 export * from './spend';
+export * from './advisor-actions';
+export * from './payments';

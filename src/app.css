@@ -402,3 +402,39 @@ table.fin tr.sep-row td:first-child{background:var(--bg)!important}
 .hub-chip,.mchip{scroll-snap-align:center}
 /* al final del scroll, no desvanecer (cuando no hay overflow) */
 @media(min-width:1024px){.hub-chips,.mchips{-webkit-mask-image:none;mask-image:none}}
+
+/* Asesor — panel de acciones recomendadas */
+.actions-panel{margin-top:16px;border:1px solid var(--border-strong);border-radius:var(--r-lg);padding:20px;background:linear-gradient(160deg,var(--surface-2),var(--surface))}
+.actions-panel h3{font-family:var(--display);font-size:18px;display:flex;align-items:center;gap:9px;margin-bottom:12px}
+.act-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+.act-cell{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:14px}
+.act-cell span{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted)}
+.act-cell b{display:block;font-family:var(--display);font-size:20px;margin-top:5px}
+.act-note{color:var(--text-2);font-size:14px;margin:8px 0}
+.act-sub{color:var(--text-2);font-size:14px;margin-bottom:12px}
+.act-fine{color:var(--text-muted);font-size:12px;margin-top:12px;font-style:italic}
+.plan{border:1px solid var(--border);border-radius:var(--r);padding:14px;margin-bottom:12px;background:var(--surface)}
+.plan-head{margin-bottom:10px}
+.plan-head b{font-family:var(--display);font-size:15px}
+.plan-head span{display:block;font-size:12px;color:var(--text-muted);margin-top:2px}
+.plan-row{display:flex;align-items:center;gap:12px;padding:8px 0;border-top:1px solid var(--border)}
+.plan-n{width:26px;height:26px;flex:none;border-radius:50%;display:grid;place-items:center;font-family:var(--display);font-weight:700;font-size:13px;background:var(--surface-2);color:var(--coral)}
+.plan-meta{font-size:12px;color:var(--text-muted);margin-top:2px}
+
+/* Control de pagos */
+.pay-summary{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+@media(min-width:720px){.pay-summary{grid-template-columns:repeat(5,1fr)}}
+.pay-block{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:13px 14px}
+.pay-block span{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted)}
+.pay-block b{display:block;font-family:var(--display);font-size:17px;margin-top:5px;letter-spacing:-.01em}
+.pay-row{display:flex;align-items:center;gap:12px;padding:13px 14px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);margin-bottom:10px;flex-wrap:wrap}
+.pay-main{flex:1;min-width:130px}
+.pay-name{font-weight:600;font-size:15px}
+.pay-meta{font-size:12px;color:var(--text-muted);margin-top:2px}
+.pay-btns{display:flex;gap:6px}
+.pb{padding:8px 12px;border-radius:100px;font-size:12px;font-weight:600;border:1px solid var(--border);color:var(--text-muted)}
+.pb.paid.on{background:var(--teal);color:#0e0c1e;border-color:transparent}
+.pb.pend.on{background:var(--neg);color:#fff;border-color:transparent}
+.pb.defer.on{background:var(--warn);color:#0e0c1e;border-color:transparent}
+.pb:hover{color:var(--text)}
+@media(max-width:420px){.pay-btns{width:100%}.pb{flex:1;text-align:center}}

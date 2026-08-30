@@ -2,12 +2,17 @@
   import { store } from '../../lib/store.svelte';
   import { formatMoney } from '../../lib/money';
   import { diagnose, PILLARS } from '../../domain/finance/advisor';
+  import { debtPayoffPlans, investmentAdvice } from '../../domain/finance/advisor-actions';
   import Icon from '../../lib/Icon.svelte';
 
   const money = (n: number) => formatMoney(n, store.currency);
   const d = $derived(diagnose(store.effectiveConcepts));
   let openPillar = $state<'debt' | 'invest' | 'edu' | null>(null);
   const detail = $derived(openPillar ? PILLARS[openPillar] : null);
+
+  let showActions = $state(false);
+  const plans = $derived(debtPayoffPlans(store.effectiveConcepts));
+  const invest = $derived(investmentAdvice(store.effectiveConcepts));
 </script>
 
 <div class="view">
@@ -24,8 +29,53 @@
         <div><span>Flujo libre</span><b style="color:{d.av < 0 ? 'var(--neg)' : 'var(--pos)'}">{money(d.av)}</b></div>
         <div><span>Tasa de ahorro</span><b>{d.sr.toFixed(0)}%</b></div>
       </div>
+      <button class="btn primary" style="margin-top:16px;max-width:260px" onclick={() => (showActions = !showActions)}>
+        <Icon name="compass" size={16} /> {showActions ? 'Ocultar acciones' : 'Acciones recomendadas'}
+      </button>
     </div>
   </div>
+
+  {#if showActions}
+    <div class="actions-panel">
+      {#if d.focus === 'invest'}
+        <h3><Icon name="trending-up" size={18} /> Cuánto invertir</h3>
+        <div class="act-grid">
+          <div class="act-cell"><span>Puedes invertir</span><b style="color:var(--teal)">{money(invest.investable)}</b></div>
+          <div class="act-cell"><span>Mantén líquido</span><b style="color:var(--coral)">{money(invest.keepLiquid)}</b></div>
+        </div>
+        <p class="act-note">{invest.rationale}</p>
+        <p class="act-fine">Contenido educativo, no una recomendación de compra. Diversifica y usa costo promedio (DCA).</p>
+      {:else}
+        <h3><Icon name="trending-down" size={18} /> Qué deuda pagar primero</h3>
+        {#if plans.avalanche.length}
+          <p class="act-sub">Tienes dos estrategias válidas — elige la que se ajuste a ti:</p>
+
+          <div class="plan">
+            <div class="plan-head"><b>Avalancha</b><span>Ahorra más dinero — ataca la de mayor interés</span></div>
+            {#each plans.avalanche as it, i}
+              <div class="plan-row">
+                <span class="plan-n">{i + 1}</span>
+                <div style="flex:1"><b>{it.concept.name}</b><div class="plan-meta">Saldo {money(it.balance)}{it.annualRate !== null ? ` · E.A. ${(it.annualRate * 100).toFixed(1)}%` : ''}</div></div>
+              </div>
+            {/each}
+          </div>
+
+          <div class="plan">
+            <div class="plan-head"><b>Bola de nieve</b><span>Motiva más — liquida primero la más pequeña</span></div>
+            {#each plans.snowball as it, i}
+              <div class="plan-row">
+                <span class="plan-n">{i + 1}</span>
+                <div style="flex:1"><b>{it.concept.name}</b><div class="plan-meta">Saldo {money(it.balance)}{it.annualRate !== null ? ` · E.A. ${(it.annualRate * 100).toFixed(1)}%` : ''}</div></div>
+              </div>
+            {/each}
+          </div>
+          <p class="act-fine">Mantén los mínimos de todas y vuelca cada peso extra a la deuda #1 de la estrategia elegida. Al liquidarla, pasa su cuota a la siguiente.</p>
+        {:else}
+          <p class="act-note">No tienes deudas con cuotas registradas. 🎉 Tu foco es fortalecer el fondo de emergencia y luego invertir.</p>
+        {/if}
+      {/if}
+    </div>
+  {/if}
 
   <div style="font-family:var(--display);font-weight:600;margin:22px 0 4px;font-size:16px">Explora un pilar</div>
   <div class="pillars">

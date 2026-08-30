@@ -2,6 +2,8 @@ import type { Concept } from '../domain/finance/types';
 import type { AgendaEvent } from '../domain/agenda/types';
 import type { Spend } from '../domain/finance/spend';
 import { spendConcepts } from '../domain/finance/spend';
+import type { PayLedger, PayStatus } from '../domain/finance/payments';
+import { payKey } from '../domain/finance/payments';
 import type { Currency } from './money';
 import type { Snapshot } from '../data/repository';
 import { repository } from '../data/indexeddb-repo';
@@ -13,7 +15,7 @@ type View =
   | 'overview' | 'summary' | 'advisor'
   | 'c_income' | 'c_fixed' | 'c_memberships' | 'c_unexpected'
   | 'c_provisions' | 'c_entertainment' | 'c_balances'
-  | 'events' | 'calendar' | 'settings' | 'spends';
+  | 'events' | 'calendar' | 'settings' | 'spends' | 'payments';
 
 const SCHEMA_VERSION = 1;
 
@@ -35,6 +37,7 @@ class AppStore {
   concepts = $state<Concept[]>([]);
   events = $state<AgendaEvent[]>([]);
   spends = $state<Spend[]>([]);
+  payLedger = $state<PayLedger>({});
 
   currency = $state<Currency>('COP');
   theme = $state<'dark' | 'light'>('dark');
@@ -87,6 +90,7 @@ class AppStore {
     this.concepts = await repository.listConcepts();
     this.events = await repository.listEvents();
     this.spends = await repository.listSpends();
+    this.payLedger = (await repository.getSetting<PayLedger>('payLedger')) ?? {};
   }
 
   goScreen(s: Screen) { this.screen = s; }
@@ -130,7 +134,7 @@ class AppStore {
 
   private async persistVault() {
     if (!this.pin) return;
-    const env = await encryptJSON({ concepts: this.concepts, events: this.events, spends: this.spends }, this.pin);
+    const env = await encryptJSON({ concepts: this.concepts, events: this.events, spends: this.spends, payLedger: this.payLedger }, this.pin);
     await db.vault.put({ id: 'vault', envelope: env, updatedAt: new Date().toISOString() });
   }
 
@@ -165,6 +169,15 @@ class AppStore {
       await this.persistVault();
     } else { await repository.saveSpend(sp); await this.reload(); }
   }
+  async setPayStatus(conceptId: string, year: number, month: number, status: PayStatus) {
+    const key = payKey(conceptId, year, month);
+    const next = { ...this.payLedger };
+    if (status === 'pending') delete next[key]; else next[key] = status;
+    this.payLedger = next;
+    if (this.pinEnabled) await this.persistVault();
+    else await repository.setSetting('payLedger', next);
+  }
+
   async deleteSpend(id: string) {
     if (this.pinEnabled) { this.spends = this.spends.filter((x) => x.id !== id); await this.persistVault(); }
     else { await repository.deleteSpend(id); await this.reload(); }
@@ -191,10 +204,11 @@ class AppStore {
     const row = await db.vault.get('vault');
     if (!row) return false;
     try {
-      const data = await decryptJSON<{ concepts: Concept[]; events: AgendaEvent[]; spends?: Spend[] }>(row.envelope, pin);
+      const data = await decryptJSON<{ concepts: Concept[]; events: AgendaEvent[]; spends?: Spend[]; payLedger?: PayLedger }>(row.envelope, pin);
       this.concepts = data.concepts ?? [];
       this.events = data.events ?? [];
       this.spends = data.spends ?? [];
+      this.payLedger = data.payLedger ?? {};
       this.pin = pin; this.locked = false;
       return true;
     } catch { return false; }
@@ -205,14 +219,21 @@ class AppStore {
     this.concepts = [];
     this.events = [];
     this.spends = [];
-    if (this.pinEnabled) await this.persistVault();
-    else { await db.concepts.clear(); await db.events.clear(); await db.spends.clear(); }
+    this.payLedger = {};
+    if (this.pinEnabled) {
+      await this.persistVault();
+    } else {
+      await db.concepts.clear();
+      await db.events.clear();
+      await db.spends.clear();
+      await repository.setSetting('payLedger', {});
+    }
   }
 
   // ---- respaldo ----
   buildSnapshot(): Snapshot {
     return {
-      concepts: this.concepts, events: this.events, spends: this.spends,
+      concepts: this.concepts, events: this.events, spends: this.spends, payLedger: this.payLedger,
       settings: { currency: this.currency, theme: this.theme, period: this.period, autofill: this.autofill },
       version: SCHEMA_VERSION, exportedAt: new Date().toISOString(),
     };
@@ -231,8 +252,13 @@ class AppStore {
     this.concepts = parsed.concepts;
     this.events = parsed.events;
     this.spends = (parsed as any).spends ?? [];
-    if (this.pinEnabled) await this.persistVault();
-    else await repository.importSnapshot(parsed);
+    this.payLedger = (parsed as any).payLedger ?? {};
+    if (this.pinEnabled) {
+      await this.persistVault();
+    } else {
+      await repository.importSnapshot(parsed);
+      await repository.setSetting('payLedger', this.payLedger);
+    }
     const s: any = parsed.settings ?? {};
     if (s.currency) await this.setCurrency(s.currency);
     if (s.theme) await this.setTheme(s.theme);

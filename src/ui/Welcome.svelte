@@ -15,10 +15,10 @@
   <Starfield />
   <div class="nebula"></div>
   <div class="welcome-inner">
-    <div class="welcome-eyebrow">Tu dinero · Tu tiempo </div>
+    <div class="welcome-eyebrow">Tu dinero · Tu tiempo · Tu destino</div>
     <img class="logo-mark" src={mark} alt="DALTO" />
     <img class="logo-word" src={word} alt="DALTO" />
-    <p class="welcome-sub" style="margin-top:18px">Toma el control financiero.</p>
+    <p class="welcome-sub" style="margin-top:18px">Toma el control de tu destino financiero.</p>
     <div style="display:flex;flex-direction:column;gap:12px;max-width:280px;margin:0 auto">
       <button class="btn-start" style="width:100%" onclick={iniciar}>INICIAR</button>
       <button class="btn-start ghost-start" style="width:100%" onclick={() => store.goScreen('register')}>REGISTRARSE</button>

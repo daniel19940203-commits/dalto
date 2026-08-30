@@ -10,6 +10,7 @@ export interface Snapshot {
   concepts: Concept[];
   events: AgendaEvent[];
   spends?: Spend[];
+  payLedger?: Record<string, string>;
   settings: Record<string, unknown>;
   version: number;
   exportedAt: string;

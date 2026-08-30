@@ -54,9 +54,12 @@
     {/each}
   </div>
 
-  <div style="display:flex;justify-content:space-between;align-items:center;margin:6px 0 16px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin:6px 0 16px;gap:10px;flex-wrap:wrap">
     <div class="view-head" style="margin:0"><h2>{meta.t}</h2><p>{items.length} {items.length === 1 ? 'concepto' : 'conceptos'}</p></div>
-    <button class="add-fab" onclick={add}><Icon name="plus" size={18} /> Nuevo</button>
+    <div style="display:flex;gap:8px">
+      <button class="chip-btn" onclick={() => store.go('payments')}><Icon name="check" size={15} /> Pagos</button>
+      <button class="add-fab" onclick={add}><Icon name="plus" size={18} /> Nuevo</button>
+    </div>
   </div>
 
   {#if items.length}

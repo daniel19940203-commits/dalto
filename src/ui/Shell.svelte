@@ -6,6 +6,7 @@
   import Concepts from './views/Concepts.svelte';
   import Saldos from './views/Saldos.svelte';
   import Spends from './views/Spends.svelte';
+  import Payments from './views/Payments.svelte';
   import Summary from './views/Summary.svelte';
   import Advisor from './views/Advisor.svelte';
   import Events from './views/Events.svelte';
@@ -15,13 +16,13 @@
 
   const TITLES: Record<string, string> = {
     overview: 'General', summary: 'Resumen específico', advisor: 'Asesor financiero',
-    events: 'Próximos eventos', calendar: 'Calendario', settings: 'Ajustes', spends: 'Control de gasto',
+    events: 'Próximos eventos', calendar: 'Calendario', settings: 'Ajustes', spends: 'Control de gasto', payments: 'Control de pagos',
     c_income: 'Ingresos', c_fixed: 'Gastos fijos', c_memberships: 'Membresías',
     c_unexpected: 'Imprevistos', c_provisions: 'Provisiones', c_entertainment: 'Entretenimiento', c_balances: 'Saldos',
   };
 
   const finNav = [
-    ['overview', 'wallet', 'General'], ['summary', 'scale', 'Resumen'],
+    ['overview', 'wallet', 'General'], ['summary', 'scale', 'Resumen'], ['payments', 'check', 'Pagos'],
     ['c_income', 'trending-up', 'Ingresos'], ['c_fixed', 'trending-down', 'Gastos fijos'],
     ['c_memberships', 'credit-card', 'Membresías'], ['c_unexpected', 'alert', 'Imprevistos'],
     ['c_provisions', 'shield', 'Provisiones'], ['c_entertainment', 'sparkles', 'Entretenimiento'],
@@ -29,7 +30,7 @@
   ] as const;
   const agNav = [['events', 'calendar', 'Próximos'], ['calendar', 'calendar', 'Calendario']] as const;
   const bottom = [
-    ['overview', 'home', 'Inicio'], ['summary', 'scale', 'Resumen'],
+    ['overview', 'home', 'Inicio'], ['summary', 'scale', 'Resumen'], ['payments', 'check', 'Pagos'],
     ['c_income', 'wallet', 'Conceptos'], ['advisor', 'compass', 'Asesor'], ['events', 'calendar', 'Agenda'],
     ['spends', 'wallet', 'Gastos'],
   ] as const;
@@ -106,6 +107,8 @@
         <Settings />
       {:else if store.view === 'spends'}
         <Spends />
+      {:else if store.view === 'payments'}
+        <Payments />
       {:else}
         <Placeholder title={TITLES[store.view]} />
       {/if}
