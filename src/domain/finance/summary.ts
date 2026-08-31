@@ -30,7 +30,7 @@ export const BLOCKS: BlockDef[] = [
 
 /** Subcategorías estandarizadas por categoría. */
 export const SUBCATS: Record<Category, string[]> = {
-  income: ['Ingresos fijos', 'Ingresos variables'],
+  income: ['Ingresos fijos', 'Ingresos variables', 'Ingreso adicional'],
   fixed: ['Gastos de supervivencia', 'Obligaciones no esenciales'],
   memberships: ['Membresías', 'Ocio'],
   unexpected: ['Imprevistos'],

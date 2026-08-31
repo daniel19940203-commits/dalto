@@ -15,20 +15,23 @@
   const nowM = new Date().getMonth();
   const MONTHS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
-  // Variantes del formulario por categoría
-  const isProvision = cat === 'provisions';
-  const isUnexpected = cat === 'unexpected';
-  const canRecur = !isProvision && !isUnexpected; // muestra toggle "cargo fijo"
-  const isDebtCat = cat === 'fixed' || cat === 'memberships'; // capital + interés
-  const showFreq = !isUnexpected;
-
-  const amountLabel = cat === 'income' ? 'Monto'
-    : isProvision ? 'Ahorro mensual'
-    : isUnexpected ? 'Monto del imprevisto'
-    : 'Costo / cuota mensual';
-
   let name = $state(concept?.name ?? '');
   let type = $state(concept?.type ?? SUBCATS[cat][0]);
+
+  // Variantes del formulario (reactivas al tipo seleccionado)
+  const isProvision = cat === 'provisions';
+  const isUnexpected = cat === 'unexpected';
+  const isExtraIncome = $derived(cat === 'income' && type === 'Ingreso adicional');
+  const isDebtCat = cat === 'fixed' || cat === 'memberships'; // capital + interés
+  const canRecur = $derived(!isProvision && !isUnexpected && !isExtraIncome); // toggle "cargo fijo"
+  const showFreq = $derived(!isUnexpected && !isExtraIncome);
+  const oneMonth = $derived(isUnexpected || isExtraIncome); // aplica solo al mes elegido
+
+  const amountLabel = $derived(cat === 'income' ? (isExtraIncome ? 'Monto del ingreso' : 'Monto')
+    : isProvision ? 'Ahorro mensual'
+    : isUnexpected ? 'Monto del imprevisto'
+    : 'Costo / cuota mensual');
+
   let frequency = $state<'monthly' | 'semiMonthly'>(concept?.frequency ?? 'monthly');
   let amount = $state(concept ? String(concept.amount) : '');
   let startMonth = $state(concept?.startMonth ?? nowM);
@@ -59,7 +62,7 @@
 
     let dur = 0;
     let rec: boolean | undefined = true;
-    if (isUnexpected) { dur = 1; rec = false; }          // imprevisto = un solo mes
+    if (oneMonth) { dur = 1; rec = false; }               // imprevisto o ingreso adicional = un solo mes
     else if (isProvision) { dur = 0; rec = true; }        // provisión = recurrente
     else if (canRecur && !recurring) { dur = Math.max(1, Number(installments) || 1); rec = false; }
 
@@ -126,6 +129,9 @@
 
     {#if isUnexpected}
       <div class="callout">Un imprevisto aplica <b>solo al mes seleccionado</b>.</div>
+    {/if}
+    {#if isExtraIncome}
+      <div class="callout" style="border-color:var(--teal)">Un ingreso adicional aplica <b>solo al mes seleccionado</b> — sin proyección ni recurrencia.</div>
     {/if}
 
     {#if canRecur}
