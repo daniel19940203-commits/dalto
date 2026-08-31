@@ -2,7 +2,7 @@
   import { store } from '../../lib/store.svelte';
   import { formatMoney } from '../../lib/money';
   import { CAT_META, CONCEPT_CATS } from '../../lib/catalog';
-  import { payablesForMonth, paySummary } from '../../domain/finance/payments';
+  import { payablesForMonth, paySummary, entertainmentTotal } from '../../domain/finance/payments';
   import type { PayStatus } from '../../domain/finance/payments';
   import type { FinanceOptions } from '../../domain/finance/types';
   import Icon from '../../lib/Icon.svelte';
@@ -16,6 +16,7 @@
   const opts = $derived<FinanceOptions>({ autofill: store.autofill, year: 2026, currentMonth: nowM });
   const items = $derived(payablesForMonth(store.effectiveConcepts, store.payLedger, month, opts));
   const sum = $derived(paySummary(store.effectiveConcepts, store.payLedger, month, opts));
+  const entTotal = $derived(entertainmentTotal(store.effectiveConcepts, month, opts));
 
   function setStatus(id: string, status: PayStatus) {
     store.setPayStatus(id, 2026, month, status);
@@ -29,6 +30,14 @@
     {#each MONTHS as m, i}
       <button class="mchip" class:on={month === i} use:scrollActive={month === i} onclick={() => (month = i)}>{m}</button>
     {/each}
+  </div>
+
+  <div class="ent-box">
+    <div>
+      <div class="ent-lab"><Icon name="sparkles" size={15} /> Gastos entretenimiento</div>
+      <div class="ent-sub">Gasto variable — no se marca como pago</div>
+    </div>
+    <div class="ent-amt">{money(entTotal)}</div>
   </div>
 
   <div class="pay-summary">

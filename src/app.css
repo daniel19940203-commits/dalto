@@ -445,3 +445,9 @@ table.fin tr.sep-row td:first-child{background:var(--bg)!important}
 /* refuerzo: el modal siempre por encima de todo */
 .modal-back{z-index:300}
 .modal{padding-bottom:calc(16px + env(safe-area-inset-bottom))}
+
+/* Pagos — recuadro de gastos de entretenimiento */
+.ent-box{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 18px;margin-bottom:14px;border-radius:var(--r);border:1px solid var(--border-strong);background:linear-gradient(100deg,rgba(174,68,90,.12),var(--surface))}
+.ent-lab{font-family:var(--display);font-weight:600;font-size:15px;display:flex;align-items:center;gap:8px}
+.ent-sub{font-size:12px;color:var(--text-muted);margin-top:2px}
+.ent-amt{font-family:var(--display);font-weight:700;font-size:20px;color:var(--rose)}

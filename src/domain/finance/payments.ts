@@ -19,8 +19,8 @@ export function getStatus(ledger: PayLedger, conceptId: string, year: number, mo
   return ledger[payKey(conceptId, year, month)] ?? 'pending';
 }
 
-/** Conceptos "pagables" del mes: salidas con valor > 0 en ese mes. */
-const PAYABLE_CATS = ['fixed', 'memberships', 'unexpected', 'entertainment', 'provisions'] as const;
+/** Conceptos "pagables" del mes: obligaciones (NO entretenimiento, que es gasto variable). */
+const PAYABLE_CATS = ['fixed', 'memberships', 'unexpected', 'provisions'] as const;
 
 export interface PayableItem {
   concept: Concept;
@@ -50,6 +50,11 @@ export interface PaySummary {
   pending: number;
   deferred: number;
   balance: number; // ingreso − pagado
+}
+
+/** Total de entretenimiento del mes (presupuestado + control de gasto real). */
+export function entertainmentTotal(concepts: Concept[], month: number, opts: FinanceOptions): number {
+  return byCategory(concepts, 'entertainment').reduce((s, c) => s + monthlyValue(c, month, opts).value, 0);
 }
 
 export function paySummary(
