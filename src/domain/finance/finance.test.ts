@@ -224,7 +224,10 @@ describe('Control de pagos', () => {
     const s = paySummary(base, ledger, 7, opts2);
     expect(s.income).toBe(5_300_000);
     expect(s.paid).toBe(1_400_000); // Arriendo marcado pagado
-    expect(s.balance).toBe(5_300_000 - 1_400_000);
+    // saldo = ingreso − pagado − entretenimiento (Restaurantes 300k + Viajes 250k)
+    expect(s.balance).toBe(5_300_000 - 1_400_000 - 550_000);
+    // entretenimiento ya NO es pagable
+    expect(items.some((i) => i.concept.category === 'entertainment')).toBe(false);
     expect(s.pending).toBeGreaterThan(0);
   });
 });

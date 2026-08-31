@@ -35,7 +35,6 @@
   <div class="ent-box">
     <div>
       <div class="ent-lab"><Icon name="sparkles" size={15} /> Gastos entretenimiento</div>
-      <div class="ent-sub">Gasto variable — no se marca como pago</div>
     </div>
     <div class="ent-amt">{money(entTotal)}</div>
   </div>

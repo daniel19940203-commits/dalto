@@ -49,7 +49,7 @@ export interface PaySummary {
   paid: number;
   pending: number;
   deferred: number;
-  balance: number; // ingreso − pagado
+  balance: number; // ingreso − pagado − entretenimiento
 }
 
 /** Total de entretenimiento del mes (presupuestado + control de gasto real). */
@@ -71,5 +71,6 @@ export function paySummary(
     else pending += it.amount;
   }
   const income = byCategory(concepts, 'income').reduce((s, c) => s + monthlyValue(c, month, opts).value, 0);
-  return { income, paid, pending, deferred, balance: income - paid };
+  const entertainment = entertainmentTotal(concepts, month, opts);
+  return { income, paid, pending, deferred, balance: income - paid - entertainment };
 }
