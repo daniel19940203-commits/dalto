@@ -14,6 +14,11 @@
     catch { toast.show('Archivo no válido'); }
     (e.target as HTMLInputElement).value = '';
   }
+  async function migrate() {
+    toast.show('Subiendo tus datos…');
+    const ok = await store.migrateLocalToCloud();
+    toast.show(ok ? 'Datos subidos a la nube' : 'No se pudo subir (revisa tu conexión)');
+  }
 </script>
 
 <div class="view">
@@ -45,6 +50,23 @@
       <div class="sw"></div><div style="flex:1"><span class="tt">Auto-completar periodos futuros</span>
         <div class="sd" style="font-size:12px">Proyecta cuotas y recurrentes a meses siguientes</div></div>
     </button>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <div style="font-family:var(--display);font-weight:600;margin-bottom:4px">Sincronización en la nube</div>
+    <p style="color:var(--text-muted);font-size:13px;margin-bottom:12px">
+      {#if store.syncState === 'syncing'}Sincronizando…
+      {:else if store.syncState === 'pending'}Cambios pendientes por subir (se enviarán al reconectar).
+      {:else if store.syncState === 'offline'}Sin conexión. Tus cambios se guardan local y se sincronizan luego.
+      {:else if store.syncState === 'error'}Hubo un problema al sincronizar. Reintenta.
+      {:else}Al día.{/if}
+      {#if store.lastSync}<br><span style="font-size:11px">Última: {new Date(store.lastSync).toLocaleString('es-CO')}</span>{/if}
+    </p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <button class="btn ghost" style="flex:none;padding:11px 16px" onclick={() => store.syncNow()}><Icon name="trending-up" size={16} /> Sincronizar ahora</button>
+      <button class="btn ghost" style="flex:none;padding:11px 16px" onclick={migrate}><Icon name="upload" size={16} /> Subir mis datos</button>
+    </div>
+    <p style="color:var(--text-muted);font-size:11px;margin-top:10px">"Subir mis datos" copia a tu cuenta lo de este dispositivo. Úsalo una vez para migrar tu información actual.</p>
   </div>
 
   <div class="card" style="margin-top:16px">

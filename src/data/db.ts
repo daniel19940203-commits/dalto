@@ -14,6 +14,15 @@ export interface SettingRow {
 }
 
 /** Sobre cifrado del snapshot completo (cuando el PIN/cifrado está activo). */
+export interface OutboxOp {
+  seq?: number;
+  entity: 'concept' | 'event' | 'spend' | 'ledger';
+  op: 'upsert' | 'delete';
+  id: string;      // id o key (ledger)
+  payload?: unknown;
+  ts: string;
+}
+
 export interface VaultRow {
   id: 'vault';
   envelope: Envelope;
@@ -24,6 +33,7 @@ export class DaltoDB extends Dexie {
   concepts!: Table<Concept, string>;
   events!: Table<AgendaEvent, string>;
   spends!: Table<Spend, string>;
+  outbox!: Table<OutboxOp, number>;
   settings!: Table<SettingRow, string>;
   vault!: Table<VaultRow, string>;
 
@@ -38,6 +48,9 @@ export class DaltoDB extends Dexie {
     });
     this.version(2).stores({
       spends: 'id, month, category, date',
+    });
+    this.version(3).stores({
+      outbox: '++seq, entity',
     });
   }
 }

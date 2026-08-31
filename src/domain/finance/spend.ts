@@ -24,6 +24,7 @@ export interface Spend {
   month: number;  // 0-11: mes al que se consolida el gasto
   category: SpendCategory;
   note?: string;
+  updatedAt?: string;
 }
 
 /** Total de gasto real en un mes (0-11). */

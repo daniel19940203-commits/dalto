@@ -63,6 +63,8 @@ export interface Concept {
   description?: string;
   /** Soft-delete: conserva histórico sin mostrarlo. */
   archived?: boolean;
+  /** Sello de última modificación (ISO) para sincronización nube. */
+  updatedAt?: string;
 }
 
 export interface FinanceOptions {

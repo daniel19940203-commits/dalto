@@ -9,6 +9,7 @@ export interface AgendaEvent {
   color: string;
   description?: string;
   reminder?: boolean; // aviso 1 día antes (se muestra al abrir la app)
+  updatedAt?: string;
 }
 
 export const CATEGORY_COLORS: Record<EventCategory, string> = {

@@ -11,6 +11,14 @@ import { db, requestPersistentStorage } from '../data/db';
 import { encryptJSON } from '../data/crypto';
 import { supabase } from './supabase';
 import type { Session } from '@supabase/supabase-js';
+import type { OutboxOp } from '../data/db';
+import {
+  cloudFetchAll, cloudUpsertConcept, cloudUpsertEvent, cloudUpsertSpend, cloudUpsertLedger,
+  cloudDelete, cloudDeleteLedger, cloudPushAll,
+} from '../data/cloud';
+
+type OutEntity = 'concept' | 'event' | 'spend' | 'ledger';
+type SyncState = 'idle' | 'syncing' | 'pending' | 'offline' | 'error';
 
 type Screen = 'welcome' | 'register' | 'login' | 'verify' | 'forgot' | 'menu' | 'shell';
 type View =
@@ -42,6 +50,10 @@ class AppStore {
   events = $state<AgendaEvent[]>([]);
   spends = $state<Spend[]>([]);
   payLedger = $state<PayLedger>({});
+  payLedgerMeta = $state<Record<string, string>>({});
+
+  syncState = $state<SyncState>('idle');
+  lastSync = $state<string>('');
 
   currency = $state<Currency>('COP');
   theme = $state<'dark' | 'light'>('dark');
@@ -68,6 +80,12 @@ class AppStore {
 
     await this.reload();
     this.ready = true;
+
+    // Sincronización: al entrar (si hay sesión) y cuando vuelva la conexión.
+    if (typeof window !== 'undefined') {
+      window.addEventListener('online', () => this.syncNow());
+    }
+    if (this.authStatus === 'signedIn') this.syncNow();
   }
 
   private applySession(session: Session | null) {
@@ -82,6 +100,7 @@ class AppStore {
     this.account = { email: user.email ?? '', name: meta.name ?? '', phone: meta.phone ?? '' };
     this.authStatus = 'signedIn';
     if (['welcome', 'login', 'register', 'verify', 'forgot'].includes(this.screen)) this.screen = 'menu';
+    this.syncNow();
   }
 
   private async loadPrefs() {
@@ -96,6 +115,7 @@ class AppStore {
     this.events = await repository.listEvents();
     this.spends = await repository.listSpends();
     this.payLedger = (await repository.getSetting<PayLedger>('payLedger')) ?? {};
+    this.payLedgerMeta = (await repository.getSetting<Record<string, string>>('payLedgerMeta')) ?? {};
   }
 
   goScreen(s: Screen) { this.screen = s; }
@@ -160,49 +180,172 @@ class AppStore {
     await db.vault.put({ id: 'vault', envelope: env, updatedAt: new Date().toISOString() });
   }
 
+  // ---- cola offline + intento de escritura en la nube ----
+  private online(): boolean { return typeof navigator === 'undefined' ? true : navigator.onLine; }
+
+  private async cloudTry(entity: OutEntity, op: 'upsert' | 'delete', id: string, payload?: unknown) {
+    if (this.authStatus !== 'signedIn' || !this.online()) {
+      await db.outbox.add({ entity, op, id, payload, ts: new Date().toISOString() });
+      this.syncState = 'pending';
+      return;
+    }
+    try {
+      await this.runCloudOp(entity, op, id, payload);
+    } catch {
+      await db.outbox.add({ entity, op, id, payload, ts: new Date().toISOString() });
+      this.syncState = 'pending';
+    }
+  }
+
+  private async runCloudOp(entity: OutEntity, op: 'upsert' | 'delete', id: string, payload?: unknown) {
+    if (entity === 'concept') op === 'upsert' ? await cloudUpsertConcept(payload as Concept) : await cloudDelete('concepts', id);
+    else if (entity === 'event') op === 'upsert' ? await cloudUpsertEvent(payload as AgendaEvent) : await cloudDelete('events', id);
+    else if (entity === 'spend') op === 'upsert' ? await cloudUpsertSpend(payload as Spend) : await cloudDelete('spends', id);
+    else if (entity === 'ledger') {
+      if (op === 'upsert') { const p = payload as { status: string; updatedAt: string }; await cloudUpsertLedger(id, p.status, p.updatedAt); }
+      else await cloudDeleteLedger(id);
+    }
+  }
+
   async saveConcept(c: Concept) {
-    if (this.pinEnabled) {
-      const i = this.concepts.findIndex((x) => x.id === c.id);
-      this.concepts = i >= 0 ? this.concepts.map((x) => (x.id === c.id ? c : x)) : [...this.concepts, c];
-      await this.persistVault();
-    } else { await repository.saveConcept(c); await this.reload(); }
+    c.updatedAt = new Date().toISOString();
+    await repository.saveConcept(c);
+    await this.reload();
+    await this.cloudTry('concept', 'upsert', c.id, c);
   }
   async deleteConcept(id: string) {
-    if (this.pinEnabled) { this.concepts = this.concepts.filter((x) => x.id !== id); await this.persistVault(); }
-    else { await repository.deleteConcept(id, true); await this.reload(); }
+    await repository.deleteConcept(id, true); // soft-delete (archived) local
+    const arch = await db.concepts.get(id);
+    await this.reload();
+    if (arch) await this.cloudTry('concept', 'upsert', id, arch); // nube: archivado
   }
 
   async saveEvent(e: AgendaEvent) {
-    if (this.pinEnabled) {
-      const i = this.events.findIndex((x) => x.id === e.id);
-      this.events = i >= 0 ? this.events.map((x) => (x.id === e.id ? e : x)) : [...this.events, e];
-      await this.persistVault();
-    } else { await repository.saveEvent(e); await this.reload(); }
+    e.updatedAt = new Date().toISOString();
+    await repository.saveEvent(e);
+    await this.reload();
+    await this.cloudTry('event', 'upsert', e.id, e);
   }
   async deleteEvent(id: string) {
-    if (this.pinEnabled) { this.events = this.events.filter((x) => x.id !== id); await this.persistVault(); }
-    else { await repository.deleteEvent(id); await this.reload(); }
+    await repository.deleteEvent(id);
+    await this.reload();
+    await this.cloudTry('event', 'delete', id);
   }
 
   async saveSpend(sp: Spend) {
-    if (this.pinEnabled) {
-      const i = this.spends.findIndex((x) => x.id === sp.id);
-      this.spends = i >= 0 ? this.spends.map((x) => (x.id === sp.id ? sp : x)) : [...this.spends, sp];
-      await this.persistVault();
-    } else { await repository.saveSpend(sp); await this.reload(); }
+    sp.updatedAt = new Date().toISOString();
+    await repository.saveSpend(sp);
+    await this.reload();
+    await this.cloudTry('spend', 'upsert', sp.id, sp);
   }
-  async setPayStatus(conceptId: string, year: number, month: number, status: PayStatus) {
-    const key = payKey(conceptId, year, month);
-    const next = { ...this.payLedger };
-    if (status === 'pending') delete next[key]; else next[key] = status;
-    this.payLedger = next;
-    if (this.pinEnabled) await this.persistVault();
-    else await repository.setSetting('payLedger', next);
+  async deleteSpend(id: string) {
+    await repository.deleteSpend(id);
+    await this.reload();
+    await this.cloudTry('spend', 'delete', id);
   }
 
-  async deleteSpend(id: string) {
-    if (this.pinEnabled) { this.spends = this.spends.filter((x) => x.id !== id); await this.persistVault(); }
-    else { await repository.deleteSpend(id); await this.reload(); }
+  async setPayStatus(conceptId: string, year: number, month: number, status: PayStatus) {
+    const key = payKey(conceptId, year, month);
+    const now = new Date().toISOString();
+    const next = { ...this.payLedger };
+    const meta = { ...this.payLedgerMeta };
+    if (status === 'pending') { delete next[key]; delete meta[key]; }
+    else { next[key] = status; meta[key] = now; }
+    this.payLedger = next;
+    this.payLedgerMeta = meta;
+    await repository.setSetting('payLedger', next);
+    await repository.setSetting('payLedgerMeta', meta);
+    if (status === 'pending') await this.cloudTry('ledger', 'delete', key);
+    else await this.cloudTry('ledger', 'upsert', key, { status, updatedAt: now });
+  }
+
+  // ---- sincronización nube ----
+  private tsOf(x: { updatedAt?: string } | undefined): number {
+    return x?.updatedAt ? Date.parse(x.updatedAt) : 0;
+  }
+
+  private async flushOutbox() {
+    if (!this.online() || this.authStatus !== 'signedIn') return;
+    const ops = await db.outbox.orderBy('seq').toArray();
+    for (const op of ops) {
+      try { await this.runCloudOp(op.entity, op.op, op.id, op.payload); await db.outbox.delete(op.seq!); }
+      catch { break; }
+    }
+  }
+
+  private async mergeEntity(entity: 'concept' | 'event' | 'spend', cloudRows: any[]) {
+    const table = entity === 'concept' ? db.concepts : entity === 'event' ? db.events : db.spends;
+    const local = await table.toArray();
+    const cloudMap = new Map(cloudRows.map((r) => [r.id, r]));
+    for (const cr of cloudRows) {
+      const lr = local.find((x) => x.id === cr.id);
+      if (!lr || this.tsOf(cr) > this.tsOf(lr)) await (table as any).put(cr);
+    }
+    for (const lr of local) {
+      const cr = cloudMap.get(lr.id);
+      if (!cr || this.tsOf(lr) > this.tsOf(cr)) await this.runCloudOp(entity, 'upsert', lr.id, lr);
+    }
+  }
+
+  private async mergeLedger(cloudLedger: { key: string; status: string; updatedAt: string }[]) {
+    const ledger = { ...this.payLedger };
+    const meta = { ...this.payLedgerMeta };
+    const cloudMap = new Map(cloudLedger.map((x) => [x.key, x]));
+    for (const cx of cloudLedger) {
+      const lts = meta[cx.key] ? Date.parse(meta[cx.key]) : 0;
+      if (Date.parse(cx.updatedAt) > lts) { ledger[cx.key] = cx.status as any; meta[cx.key] = cx.updatedAt; }
+    }
+    for (const key of Object.keys(ledger)) {
+      const cx = cloudMap.get(key);
+      const lts = meta[key] ? Date.parse(meta[key]) : 0;
+      if (!cx || lts > Date.parse(cx.updatedAt)) {
+        await this.runCloudOp('ledger', 'upsert', key, { status: ledger[key], updatedAt: meta[key] || new Date().toISOString() });
+      }
+    }
+    this.payLedger = ledger;
+    this.payLedgerMeta = meta;
+    await repository.setSetting('payLedger', ledger);
+    await repository.setSetting('payLedgerMeta', meta);
+  }
+
+  async syncNow() {
+    if (this.authStatus !== 'signedIn') return;
+    if (!this.online()) { this.syncState = 'offline'; return; }
+    this.syncState = 'syncing';
+    try {
+      await this.flushOutbox();
+      const cloud = await cloudFetchAll();
+      if (!cloud) { this.syncState = 'error'; return; }
+      await this.mergeEntity('concept', cloud.concepts);
+      await this.mergeEntity('event', cloud.events);
+      await this.mergeEntity('spend', cloud.spends);
+      await this.mergeLedger(cloud.ledger);
+      await this.reload();
+      this.lastSync = new Date().toISOString();
+      this.syncState = (await db.outbox.count()) > 0 ? 'pending' : 'idle';
+    } catch {
+      this.syncState = 'error';
+    }
+  }
+
+  /** Botón "Subir mis datos": empuja todo lo local a la nube y sincroniza. */
+  async migrateLocalToCloud(): Promise<boolean> {
+    if (!this.online() || this.authStatus !== 'signedIn') { this.syncState = 'offline'; return false; }
+    this.syncState = 'syncing';
+    try {
+      const concepts = await db.concepts.toArray();
+      const events = await db.events.toArray();
+      const spends = await db.spends.toArray();
+      const ledger = Object.keys(this.payLedger).map((k) => ({
+        key: k, status: this.payLedger[k], updatedAt: this.payLedgerMeta[k] || new Date().toISOString(),
+      }));
+      await cloudPushAll({ concepts, events, spends, ledger });
+      await this.syncNow();
+      return true;
+    } catch {
+      this.syncState = 'error';
+      return false;
+    }
   }
 
   // ---- reset ----
