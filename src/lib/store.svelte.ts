@@ -8,9 +8,11 @@ import type { Currency } from './money';
 import type { Snapshot } from '../data/repository';
 import { repository } from '../data/indexeddb-repo';
 import { db, requestPersistentStorage } from '../data/db';
-import { encryptJSON, decryptJSON, hashPin } from '../data/crypto';
+import { encryptJSON } from '../data/crypto';
+import { supabase } from './supabase';
+import type { Session } from '@supabase/supabase-js';
 
-type Screen = 'welcome' | 'register' | 'pin' | 'menu' | 'shell';
+type Screen = 'welcome' | 'register' | 'login' | 'verify' | 'forgot' | 'menu' | 'shell';
 type View =
   | 'overview' | 'summary' | 'advisor'
   | 'c_income' | 'c_fixed' | 'c_memberships' | 'c_unexpected'
@@ -19,10 +21,12 @@ type View =
 
 const SCHEMA_VERSION = 1;
 
+export type AuthStatus = 'loading' | 'signedOut' | 'needsVerification' | 'signedIn';
+
 export interface Account {
+  email: string;
   name: string;
   phone: string;
-  pinHash: string;
 }
 
 class AppStore {
@@ -31,8 +35,8 @@ class AppStore {
   ready = $state(false);
 
   account = $state<Account | null>(null);
-  loggedIn = $state(false);
-  remember = $state(false);
+  authStatus = $state<AuthStatus>('loading');
+  pendingEmail = $state('');
 
   concepts = $state<Concept[]>([]);
   events = $state<AgendaEvent[]>([]);
@@ -44,12 +48,12 @@ class AppStore {
   period = $state<'monthly' | 'semiMonthly'>('monthly');
   autofill = $state(true);
 
-  // Cifrado opcional avanzado (independiente del PIN de entrada)
+  // Cifrado local (desactivado en el modelo nube; se conserva el motor)
   pinEnabled = $state(false);
-  locked = $state(false);
   private pin: string | null = null;
 
   get userName(): string { return this.account?.name ?? ''; }
+  get loggedIn(): boolean { return this.authStatus === 'signedIn'; }
   /** Conceptos + gasto real (bloques sintéticos de Entretenimiento). */
   get effectiveConcepts(): Concept[] { return [...this.concepts, ...spendConcepts(this.spends)]; }
 
@@ -57,26 +61,27 @@ class AppStore {
     await requestPersistentStorage();
     await this.loadPrefs();
     document.documentElement.setAttribute('data-theme', this.theme);
-    this.account = (await repository.getSetting<Account>('account')) ?? null;
-    this.remember = (await repository.getSetting<boolean>('remember')) ?? false;
-    // Recordar PIN: si está activo y hay cuenta, entra directo sin pedir PIN.
-    if (this.account && this.remember) { this.loggedIn = true; this.screen = 'menu'; }
 
-    const secure = (await repository.getSetting<boolean>('secure')) ?? false;
-    this.pinEnabled = secure;
-    if (secure) { this.locked = true; this.ready = true; return; }
-
-    // Sin cuenta = sin dueño: limpia cualquier dato residual (incluida la
-    // data de ejemplo de versiones anteriores). Los datos solo existen si
-    // el dueño de la cuenta los ingresó tras registrarse.
-    if (!this.account) {
-      await db.concepts.clear();
-      await db.events.clear();
-      await db.spends.clear();
-    }
+    const { data } = await supabase.auth.getSession();
+    this.applySession(data.session);
+    supabase.auth.onAuthStateChange((_e, session) => this.applySession(session));
 
     await this.reload();
     this.ready = true;
+  }
+
+  private applySession(session: Session | null) {
+    const user = session?.user ?? null;
+    if (!user) { this.account = null; this.authStatus = 'signedOut'; return; }
+    if (!user.email_confirmed_at) {
+      this.authStatus = 'needsVerification';
+      this.pendingEmail = user.email ?? '';
+      return;
+    }
+    const meta = (user.user_metadata ?? {}) as { name?: string; phone?: string };
+    this.account = { email: user.email ?? '', name: meta.name ?? '', phone: meta.phone ?? '' };
+    this.authStatus = 'signedIn';
+    if (['welcome', 'login', 'register', 'verify', 'forgot'].includes(this.screen)) this.screen = 'menu';
   }
 
   private async loadPrefs() {
@@ -97,29 +102,46 @@ class AppStore {
   go(v: View) { this.view = v; }
   newId(): string { return crypto.randomUUID?.() ?? String(Date.now() + Math.random()); }
 
-  // ---- cuenta ----
-  async register(name: string, phone: string, pin: string, remember = false) {
-    const acc: Account = { name: name.trim(), phone: phone.trim(), pinHash: await hashPin(pin) };
-    await repository.setSetting('account', acc);
-    this.account = acc;
-    this.remember = remember;
-    await repository.setSetting('remember', remember);
-    this.loggedIn = true;
+  // ---- autenticación (Supabase) ----
+  async register(email: string, password: string, name: string, phone: string) {
+    const { error } = await supabase.auth.signUp({
+      email: email.trim(),
+      password,
+      options: { data: { name: name.trim(), phone: phone.trim() }, emailRedirectTo: window.location.origin },
+    });
+    if (error) throw error;
+    this.pendingEmail = email.trim();
+    this.authStatus = 'needsVerification';
+    this.screen = 'verify';
   }
-  async login(pin: string, remember = false): Promise<boolean> {
-    if (!this.account) return false;
-    const ok = (await hashPin(pin)) === this.account.pinHash;
-    if (ok) {
-      this.loggedIn = true;
-      this.remember = remember;
-      await repository.setSetting('remember', remember);
+
+  async login(email: string, password: string) {
+    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+    if (error) {
+      if (/confirm/i.test(error.message)) {
+        this.pendingEmail = email.trim();
+        this.authStatus = 'needsVerification';
+        this.screen = 'verify';
+        return;
+      }
+      throw error;
     }
-    return ok;
   }
+
+  async resendVerification() {
+    if (!this.pendingEmail) return;
+    await supabase.auth.resend({ type: 'signup', email: this.pendingEmail });
+  }
+
+  async requestPasswordReset(email: string) {
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: window.location.origin });
+    if (error) throw error;
+  }
+
   async logout() {
-    this.loggedIn = false;
-    this.remember = false;
-    await repository.setSetting('remember', false);
+    await supabase.auth.signOut();
+    this.account = null;
+    this.authStatus = 'signedOut';
     this.screen = 'welcome';
   }
 
@@ -181,37 +203,6 @@ class AppStore {
   async deleteSpend(id: string) {
     if (this.pinEnabled) { this.spends = this.spends.filter((x) => x.id !== id); await this.persistVault(); }
     else { await repository.deleteSpend(id); await this.reload(); }
-  }
-
-  // ---- cifrado avanzado opcional ----
-  async enablePin(pin: string) {
-    this.pin = pin;
-    await this.persistVault();
-    await db.concepts.clear(); await db.events.clear();
-    await repository.setSetting('secure', true);
-    this.pinEnabled = true;
-  }
-  async disablePin() {
-    if (!this.pin) return;
-    await db.concepts.clear(); await db.events.clear();
-    await db.concepts.bulkPut(this.concepts);
-    await db.events.bulkPut(this.events);
-    await db.vault.delete('vault');
-    await repository.setSetting('secure', false);
-    this.pinEnabled = false; this.pin = null;
-  }
-  async unlock(pin: string): Promise<boolean> {
-    const row = await db.vault.get('vault');
-    if (!row) return false;
-    try {
-      const data = await decryptJSON<{ concepts: Concept[]; events: AgendaEvent[]; spends?: Spend[]; payLedger?: PayLedger }>(row.envelope, pin);
-      this.concepts = data.concepts ?? [];
-      this.events = data.events ?? [];
-      this.spends = data.spends ?? [];
-      this.payLedger = data.payLedger ?? {};
-      this.pin = pin; this.locked = false;
-      return true;
-    } catch { return false; }
   }
 
   // ---- reset ----

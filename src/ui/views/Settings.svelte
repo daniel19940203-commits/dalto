@@ -24,7 +24,8 @@
       <div style="width:48px;height:48px;border-radius:50%;flex:none;display:grid;place-items:center;background:linear-gradient(135deg,var(--coral),var(--rose));color:#fff;font-family:var(--display);font-weight:700;font-size:20px">{store.userName.charAt(0).toUpperCase()}</div>
       <div style="flex:1">
         <div style="font-family:var(--display);font-weight:600;font-size:17px">{store.userName}</div>
-        <div style="font-size:13px;color:var(--text-muted)">{store.account.phone}</div>
+        <div style="font-size:13px;color:var(--text-muted)">{store.account.email}</div>
+        <div style="font-size:12px;color:var(--text-muted)">{store.account.phone}</div>
       </div>
       <button class="btn ghost" style="flex:none;padding:10px 14px" onclick={() => store.logout()}>Cerrar sesión</button>
     </div>
