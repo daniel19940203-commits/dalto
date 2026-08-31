@@ -438,3 +438,10 @@ table.fin tr.sep-row td:first-child{background:var(--bg)!important}
 .pb.defer.on{background:var(--warn);color:#0e0c1e;border-color:transparent}
 .pb:hover{color:var(--text)}
 @media(max-width:420px){.pay-btns{width:100%}.pb{flex:1;text-align:center}}
+
+/* FIX definitivo: ocultar la barra inferior cuando hay un formulario abierto
+   (evita que tape los botones de guardar/registrar en móvil) */
+#app:has(.modal-back) .bottomnav{display:none}
+/* refuerzo: el modal siempre por encima de todo */
+.modal-back{z-index:300}
+.modal{padding-bottom:calc(16px + env(safe-area-inset-bottom))}
