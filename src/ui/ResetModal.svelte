@@ -22,7 +22,7 @@
     </div>
     <div class="callout" style="border-color:var(--neg)">
       ¿Seguro que deseas restablecer? Se <b>eliminarán todos los conceptos y eventos</b> y los valores volverán a <b>0</b>. Esta acción no se puede deshacer.
-      {#if !store.pinEnabled}<br><br>Si quieres conservar una copia, cancela y exporta un respaldo JSON primero.{/if}
+      <br><br>Si quieres conservar una copia, cancela y exporta un respaldo JSON primero.
     </div>
     <div class="modal-actions">
       <button class="btn ghost" onclick={onClose} disabled={working}>Cancelar</button>

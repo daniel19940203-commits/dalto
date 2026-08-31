@@ -8,7 +8,6 @@ import type { Currency } from './money';
 import type { Snapshot } from '../data/repository';
 import { repository } from '../data/indexeddb-repo';
 import { db, requestPersistentStorage } from '../data/db';
-import { encryptJSON } from '../data/crypto';
 import { supabase } from './supabase';
 import type { Session } from '@supabase/supabase-js';
 import type { OutboxOp } from '../data/db';
@@ -61,8 +60,6 @@ class AppStore {
   autofill = $state(true);
 
   // Cifrado local (desactivado en el modelo nube; se conserva el motor)
-  pinEnabled = $state(false);
-  private pin: string | null = null;
 
   get userName(): string { return this.account?.name ?? ''; }
   get loggedIn(): boolean { return this.authStatus === 'signedIn'; }
@@ -172,12 +169,6 @@ class AppStore {
   async setTheme(t: 'dark' | 'light') {
     this.theme = t; document.documentElement.setAttribute('data-theme', t);
     await repository.setSetting('theme', t);
-  }
-
-  private async persistVault() {
-    if (!this.pin) return;
-    const env = await encryptJSON({ concepts: this.concepts, events: this.events, spends: this.spends, payLedger: this.payLedger }, this.pin);
-    await db.vault.put({ id: 'vault', envelope: env, updatedAt: new Date().toISOString() });
   }
 
   // ---- cola offline + intento de escritura en la nube ----
@@ -354,14 +345,10 @@ class AppStore {
     this.events = [];
     this.spends = [];
     this.payLedger = {};
-    if (this.pinEnabled) {
-      await this.persistVault();
-    } else {
-      await db.concepts.clear();
-      await db.events.clear();
-      await db.spends.clear();
-      await repository.setSetting('payLedger', {});
-    }
+    await db.concepts.clear();
+    await db.events.clear();
+    await db.spends.clear();
+    await repository.setSetting('payLedger', {});
   }
 
   // ---- respaldo ----
@@ -387,12 +374,8 @@ class AppStore {
     this.events = parsed.events;
     this.spends = (parsed as any).spends ?? [];
     this.payLedger = (parsed as any).payLedger ?? {};
-    if (this.pinEnabled) {
-      await this.persistVault();
-    } else {
-      await repository.importSnapshot(parsed);
-      await repository.setSetting('payLedger', this.payLedger);
-    }
+    await repository.importSnapshot(parsed);
+    await repository.setSetting('payLedger', this.payLedger);
     const s: any = parsed.settings ?? {};
     if (s.currency) await this.setCurrency(s.currency);
     if (s.theme) await this.setTheme(s.theme);

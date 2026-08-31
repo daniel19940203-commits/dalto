@@ -6,7 +6,6 @@ import Dexie, { type Table } from 'dexie';
 import type { Concept } from '../domain/finance/types';
 import type { AgendaEvent } from '../domain/agenda/types';
 import type { Spend } from '../domain/finance/spend';
-import type { Envelope } from './crypto';
 
 export interface SettingRow {
   key: string;
@@ -23,19 +22,12 @@ export interface OutboxOp {
   ts: string;
 }
 
-export interface VaultRow {
-  id: 'vault';
-  envelope: Envelope;
-  updatedAt: string;
-}
-
 export class DaltoDB extends Dexie {
   concepts!: Table<Concept, string>;
   events!: Table<AgendaEvent, string>;
   spends!: Table<Spend, string>;
   outbox!: Table<OutboxOp, number>;
   settings!: Table<SettingRow, string>;
-  vault!: Table<VaultRow, string>;
 
   constructor() {
     super('dalto');
@@ -51,6 +43,9 @@ export class DaltoDB extends Dexie {
     });
     this.version(3).stores({
       outbox: '++seq, entity',
+    });
+    this.version(4).stores({
+      vault: null, // tabla del PIN eliminada (sistema de cifrado retirado)
     });
   }
 }
